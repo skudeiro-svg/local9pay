@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Local9Pay</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0e0e0e;--surface:#161616;--surface2:#1f1f1f;--border:#2a2a2a;
+  --accent:#e8ff47;--accent2:#ff4747;--text:#f0f0f0;--muted:#666;
+  --green:#47ff8a;--orange:#ffaa47;
+  --nav-h:64px;--header-h:56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow-x:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:calc(var(--nav-h) + 1rem);left:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none;}
+.toast{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);padding:.75rem 1rem;border-radius:8px;font-size:.85rem;animation:slideUp .3s ease;pointer-events:auto;}
+.toast.error{border-left-color:var(--accent2);}.toast.success{border-left-color:var(--green);}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
+/* ── LOADING ── */
+#loading-screen{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem;}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── LOGIN ── */
+#login-screen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:1.5rem;}
+.login-box{width:100%;max-width:400px;padding:2.5rem 1.75rem;background:var(--surface);border:1px solid var(--border);border-radius:16px;}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;color:var(--accent);letter-spacing:2px;margin-bottom:.2rem;}
+.login-sub{color:var(--muted);font-size:.85rem;margin-bottom:2rem;}
+.field{margin-bottom:1.1rem;}
+.field label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.5px;}
+.field input,.field select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.8rem 1rem;border-radius:8px;font-size:1rem;font-family:inherit;outline:none;transition:border-color .2s;-webkit-appearance:none;}
+.field input:focus,.field select:focus{border-color:var(--accent);}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.8rem 1.25rem;border-radius:8px;font-family:inherit;font-size:.9rem;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#000;}.btn-primary:active{background:#d4eb3a;transform:scale(.98);}
+.btn-danger{background:transparent;border:1px solid var(--accent2);color:var(--accent2);}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-ghost:active{border-color:var(--accent);color:var(--accent);}
+.btn-full{width:100%;}
+.btn-sm{padding:.45rem .9rem;font-size:.8rem;border-radius:6px;}
+
+/* ── APP SHELL ── */
+#app{display:none;height:100vh;display:none;flex-direction:column;}
+
+/* Top header */
+.topbar{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1rem;gap:.75rem;position:fixed;top:0;left:0;right:0;z-index:200;}
+.topbar-logo{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--accent);letter-spacing:2px;flex:1;}
+.topbar-user{font-size:.8rem;color:var(--muted);text-align:right;line-height:1.3;}
+.topbar-user strong{display:block;color:var(--text);font-size:.85rem;}
+.topbar-logout{background:transparent;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:.25rem;line-height:1;}
+
+/* Main scroll area */
+.main{margin-top:var(--header-h);margin-bottom:var(--nav-h);padding:1.25rem 1rem;min-height:calc(100vh - var(--header-h) - var(--nav-h));overflow-y:auto;}
+
+/* Bottom nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;z-index:200;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.2rem;cursor:pointer;color:var(--muted);font-size:.65rem;font-weight:500;transition:color .15s;padding:.5rem .25rem;border:none;background:transparent;font-family:inherit;}
+.nav-item .nav-icon{font-size:1.3rem;line-height:1;}
+.nav-item.active{color:var(--accent);}
+.nav-item.active .nav-icon{transform:scale(1.1);}
+
+/* ── PAGES ── */
+.page{display:none;}.page.active{display:block;}
+.page-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:1px;margin-bottom:.2rem;}
+.page-sub{color:var(--muted);font-size:.85rem;margin-bottom:1.25rem;}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;}
+.card-title{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:.4rem;}
+.card-value{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--accent);letter-spacing:1px;}
+.card-sub{font-size:.78rem;color:var(--muted);}
+
+/* Stats grid 2x2 */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;}
+
+/* ── USER CARDS (en vez de tabla) ── */
+.user-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:.75rem;}
+.user-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;}
+.user-card-name{font-weight:600;font-size:.95rem;}
+.user-card-band{color:var(--muted);font-size:.82rem;}
+.user-card-email{color:var(--muted);font-size:.78rem;margin-bottom:.6rem;}
+.user-card-bottom{display:flex;align-items:center;justify-content:space-between;}
+.user-card-quota{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--accent);}
+.user-card-actions{display:flex;gap:.5rem;}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:.2rem .55rem;border-radius:4px;font-size:.72rem;font-weight:600;}
+.badge-ok{background:rgba(71,255,138,.1);color:var(--green);}
+.badge-pending{background:rgba(255,170,71,.1);color:var(--orange);}
+.badge-late{background:rgba(255,71,71,.1);color:var(--accent2);}
+
+/* ── MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:none;align-items:flex-end;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:1.5rem 1.25rem;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 1.25rem;}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1px;margin-bottom:1.25rem;}
+.modal-actions{display:flex;gap:.75rem;margin-top:1.25rem;}
+.modal-actions .btn{flex:1;}
+
+/* ── UPLOAD ── */
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:2rem 1rem;text-align:center;cursor:pointer;}
+.upload-zone.drag{border-color:var(--accent);background:rgba(232,255,71,.03);}
+.upload-icon{font-size:2.5rem;margin-bottom:.75rem;}
+.upload-text{color:var(--muted);font-size:.88rem;}
+.upload-text strong{color:var(--accent);}
+
+/* ── RESULT ITEMS ── */
+.result-item{background:var(--surface2);border-radius:10px;padding:.9rem 1rem;margin-bottom:.65rem;border-left:3px solid transparent;}
+.result-item.paid{border-left-color:var(--green);}
+.result-item.unpaid{border-left-color:var(--accent2);}
+.result-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.4rem;}
+.result-name{font-weight:600;font-size:.92rem;}
+.result-amount{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;}
+.result-concept{font-family:monospace;font-size:.72rem;color:var(--muted);}
+.result-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:.5rem;}
+
+/* ── HISTORIAL CARDS ── */
+.hist-card{background:var(--surface2);border-radius:10px;padding:.9rem 1rem;margin-bottom:.65rem;display:flex;justify-content:space-between;align-items:center;}
+.hist-month{font-weight:600;font-size:.9rem;}
+.hist-concept{font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:.15rem;}
+.hist-right{text-align:right;}
+.hist-amount{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--accent);}
+.hist-date{font-size:.75rem;color:var(--muted);}
+
+/* ── PERFIL ── */
+.profile-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;}
+.profile-avatar{width:56px;height:56px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:#000;flex-shrink:0;}
+.profile-name{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1px;}
+.profile-band{color:var(--muted);font-size:.85rem;}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;margin-bottom:.75rem;color:var(--muted);}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;}
+.info-item label{font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:.2rem;}
+.info-item span{font-size:.9rem;}
+
+.payment-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;margin:.75rem 0;}
+.pm-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.9rem .6rem;text-align:center;}
+.pm-icon{font-size:1.5rem;margin-bottom:.3rem;}
+.pm-name{font-weight:600;font-size:.78rem;margin-bottom:.2rem;}
+.pm-detail{color:var(--muted);font-size:.7rem;word-break:break-all;}
+
+.concept-box{background:var(--surface2);border:1px solid var(--accent);border-radius:8px;padding:1rem;margin:.75rem 0;}
+.concept-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--accent);margin-bottom:.4rem;}
+.concept-value{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:.5px;word-break:break-all;}
+
+/* ── CONFIG ── */
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.25rem;overflow-x:auto;}
+.tab{padding:.65rem 1rem;cursor:pointer;font-size:.85rem;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.config-row{background:var(--surface2);border-radius:8px;padding:.9rem 1rem;margin-bottom:.65rem;}
+.config-row-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;}
+.config-label{font-weight:500;font-size:.9rem;}
+.config-desc{font-size:.75rem;color:var(--muted);}
+.config-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.65rem .85rem;border-radius:6px;font-family:inherit;font-size:.9rem;outline:none;margin-top:.5rem;}
+.config-input:focus{border-color:var(--accent);}
+.config-input.inline{width:100px;margin-top:0;text-align:right;}
+
+.alert-box{background:rgba(255,170,71,.08);border:1px solid rgba(255,170,71,.3);border-radius:8px;padding:.9rem 1rem;margin-bottom:1rem;font-size:.85rem;color:var(--orange);}
+.alert-box.info{background:rgba(232,255,71,.05);border-color:rgba(232,255,71,.2);color:var(--accent);}
+.alert-box.success{background:rgba(71,255,138,.05);border-color:rgba(71,255,138,.2);color:var(--green);}
+
+.select-native{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.7rem .9rem;border-radius:8px;font-size:.9rem;font-family:inherit;outline:none;-webkit-appearance:none;margin-bottom:.75rem;}
+.actions-row{display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:1rem;}
+.empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);}
+.empty-icon{font-size:2.5rem;margin-bottom:.75rem;}
+.section-gap{margin-bottom:1.25rem;}
+
+/* ── DESKTOP OVERRIDE ── */
+@media(min-width:768px){
+  .bottom-nav{display:none;}
+  .topbar{display:none;}
+  #app{flex-direction:row;}
+  .sidebar-desktop{display:flex!important;}
+  .main{margin-top:0;margin-bottom:0;margin-left:220px;padding:2.5rem;}
+  #toast{bottom:2rem;left:auto;right:2rem;width:320px;}
+  .modal-bg{align-items:center;}
+  .modal{border-radius:12px;width:480px;max-width:95vw;}
+  .modal-handle{display:none;}
+  .stats-grid{grid-template-columns:repeat(4,1fr);}
+}
+
+/* ── SIDEBAR DESKTOP ── */
+.sidebar-desktop{display:none;position:fixed;left:0;top:0;bottom:0;width:220px;background:var(--surface);border-right:1px solid var(--border);flex-direction:column;padding:1.5rem 0;z-index:100;}
+.sidebar-logo{font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);padding:0 1.5rem 1.5rem;border-bottom:1px solid var(--border);letter-spacing:2px;}
+.sidebar-nav{flex:1;padding:1rem 0;}
+.sidebar-nav-item{display:flex;align-items:center;gap:.75rem;padding:.7rem 1.5rem;cursor:pointer;color:var(--muted);font-size:.9rem;transition:all .2s;border-left:3px solid transparent;}
+.sidebar-nav-item:hover{color:var(--text);background:var(--surface2);}
+.sidebar-nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(232,255,71,.05);}
+.sidebar-user{padding:1rem 1.5rem;border-top:1px solid var(--border);font-size:.8rem;}
+.sidebar-user-name{font-weight:600;color:var(--text);}.sidebar-user-role{color:var(--muted);font-size:.75rem;}
+.sidebar-logout{margin-top:.75rem;padding:.4rem 1rem;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;cursor:pointer;font-family:inherit;font-size:.8rem;width:100%;}
+.sidebar-logout:hover{border-color:var(--accent2);color:var(--accent2);}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div style="color:var(--muted);font-size:.9rem;margin-top:.5rem">Conectando...</div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">Local9Pay</div>
+    <div class="login-sub">Gestión de local de ensayo</div>
+    <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="tu@email.com" autocomplete="email"></div>
+    <div class="field"><label>Contraseña</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn btn-primary btn-full" onclick="doLogin()">Entrar</button>
+    <div id="login-error" style="margin-top:.9rem;color:var(--accent2);font-size:.85rem;display:none"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- SIDEBAR DESKTOP -->
+  <div class="sidebar-desktop" id="sidebar-desktop">
+    <div class="sidebar-logo">Local9Pay</div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user">
+      <div class="sidebar-user-name" id="sd-name">—</div>
+      <div class="sidebar-user-role" id="sd-role">—</div>
+      <button class="sidebar-logout" onclick="doLogout()">Cerrar sesión</button>
+    </div>
+  </div>
+
+  <!-- TOPBAR MOBILE -->
+  <div class="topbar">
+    <div class="topbar-logo">Local9Pay</div>
+    <div class="topbar-user">
+      <strong id="tb-name">—</strong>
+      <span id="tb-role">—</span>
+    </div>
+    <button class="topbar-logout" onclick="doLogout()" title="Salir">⏻</button>
+  </div>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page" id="page-dashboard">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub" id="dash-month">—</div>
+      <div class="stats-grid">
+        <div class="card"><div class="card-title">Bandas</div><div class="card-value" id="stat-users">—</div><div class="card-sub">activas</div></div>
+        <div class="card"><div class="card-title">Total local</div><div class="card-value" id="stat-total">—</div><div class="card-sub">al mes</div></div>
+        <div class="card"><div class="card-title">Cuota banda</div><div class="card-value" id="stat-quota">—</div><div class="card-sub">proporcional</div></div>
+        <div class="card"><div class="card-title">Pendientes</div><div class="card-value" id="stat-pending" style="color:var(--accent2)">—</div><div class="card-sub">este mes</div></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;">Estado del mes</div>
+          <button class="btn btn-ghost btn-sm" onclick="sendMonthlyReminder()">📧 Recordar</button>
+        </div>
+        <div id="dash-payment-status"><div class="empty"><div class="spinner" style="margin:0 auto"></div></div></div>
+      </div>
+    </div>
+
+    <!-- USUARIOS -->
+    <div class="page" id="page-usuarios">
+      <div class="page-title">Usuarios</div>
+      <div class="page-sub">Bandas del local</div>
+      <div class="actions-row">
+        <button class="btn btn-primary" onclick="openUserModal()">+ Nueva banda</button>
+      </div>
+      <div id="users-list"><div class="empty"><div class="spinner" style="margin:0 auto"></div></div></div>
+    </div>
+
+    <!-- PAGOS -->
+    <div class="page" id="page-pagos">
+      <div class="page-title">Verificar Pagos</div>
+      <div class="page-sub">Importa el CSV de ING</div>
+      <div class="card">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;margin-bottom:.75rem;">Mes a verificar</div>
+        <div style="display:flex;gap:.65rem;">
+          <select class="select-native" id="check-month" style="margin-bottom:0;flex:2">
+            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
+          <select class="select-native" id="check-year" style="margin-bottom:0;flex:1">
+            <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;margin-bottom:.75rem;">Archivo de movimientos</div>
+        <div class="alert-box info" style="margin-bottom:.75rem;">💡 Exporta desde ING como CSV y súbelo aquí.</div>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('excel-input').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+          <div class="upload-icon">📊</div>
+          <div class="upload-text"><strong>Toca para subir</strong> el CSV de ING</div>
+          <input type="file" id="excel-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFileUpload(event)">
+        </div>
+        <div style="display:flex;gap:.65rem;margin-top:.75rem;">
+          <button class="btn btn-ghost btn-sm" onclick="loadSampleData()">Simular prueba</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearResults()">Limpiar</button>
+        </div>
+      </div>
+      <div id="payment-results"></div>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div class="page" id="page-historial">
+      <div class="page-title">Historial</div>
+      <div class="page-sub">Registro de pagos</div>
+      <select class="select-native" id="filter-user" onchange="renderHistorial()"><option value="">Todas las bandas</option></select>
+      <select class="select-native" id="filter-status" onchange="renderHistorial()">
+        <option value="">Todos los estados</option>
+        <option value="paid">Pagado</option><option value="pending">Pendiente</option><option value="late">Tardío</option>
+      </select>
+      <div id="historial-list"><div class="empty"><div class="spinner" style="margin:0 auto"></div></div></div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="page" id="page-config">
+      <div class="page-title">Configuración</div>
+      <div class="page-sub">Ajustes del local</div>
+      <div class="tabs">
+        <div class="tab active" onclick="switchConfigTab('local',this)">Local</div>
+        <div class="tab" onclick="switchConfigTab('pagos',this)">Pagos</div>
+        <div class="tab" onclick="switchConfigTab('email',this)">Email</div>
+      </div>
+      <div id="config-tab-local">
+        <div class="config-row">
+          <div class="config-label">Nombre del local</div>
+          <div class="config-desc">Aparece en los emails</div>
+          <input class="config-input" type="text" id="cfg-sala-name">
+        </div>
+        <div class="config-row">
+          <div class="config-row-top">
+            <div><div class="config-label">Coste mensual</div><div class="config-desc">Alquiler total</div></div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="config-input inline" type="number" id="cfg-total-cost" oninput="updateQuotaPreview()"><span style="color:var(--muted)">€</span></div>
+          </div>
+        </div>
+        <div class="config-row" style="background:rgba(232,255,71,.05);border:1px solid rgba(232,255,71,.15)">
+          <div class="config-row-top">
+            <div><div class="config-label">Cuota por banda</div><div class="config-desc">Automática</div></div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--accent)" id="cfg-quota-preview">— €</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" style="margin-top:.5rem" onclick="saveConfig()">Guardar</button>
+      </div>
+      <div id="config-tab-pagos" style="display:none">
+        <div class="config-row"><div class="config-label">Bizum</div><div class="config-desc">Número de teléfono</div><input class="config-input" type="tel" id="cfg-bizum"></div>
+        <div class="config-row"><div class="config-label">IBAN</div><div class="config-desc">Número de cuenta</div><input class="config-input" type="text" id="cfg-iban"></div>
+        <div class="config-row"><div class="config-label">PayPal</div><div class="config-desc">Email o link</div><input class="config-input" type="text" id="cfg-paypal"></div>
+        <button class="btn btn-primary btn-full" style="margin-top:.5rem" onclick="saveConfig()">Guardar</button>
+      </div>
+      <div id="config-tab-email" style="display:none">
+        <div class="alert-box">⚠️ Para emails reales conecta Resend desde Supabase Edge Functions.</div>
+        <div class="config-row"><div class="config-label">Email remitente</div><input class="config-input" type="email" id="cfg-email-from"></div>
+        <div class="config-row">
+          <div class="config-row-top">
+            <div><div class="config-label">Día de recordatorio</div><div class="config-desc">Día del mes</div></div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="config-input inline" type="number" id="cfg-reminder-day" min="1" max="28"><span style="color:var(--muted)">día</span></div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" style="margin-top:.5rem" onclick="saveConfig()">Guardar</button>
+      </div>
+    </div>
+
+    <!-- MI PERFIL -->
+    <div class="page" id="page-mi-perfil">
+      <div class="page-title">Mi Perfil</div>
+      <div class="card">
+        <div class="profile-header">
+          <div class="profile-avatar" id="up-avatar">—</div>
+          <div><div class="profile-name" id="up-name">—</div><div class="profile-band" id="up-band">—</div></div>
+        </div>
+        <div class="info-grid">
+          <div class="info-item"><label>Email</label><span id="up-email" style="font-size:.82rem;word-break:break-all">—</span></div>
+          <div class="info-item"><label>Cuota mensual</label><span id="up-quota" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--accent)">—</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Concepto de pago</div>
+        <p style="color:var(--muted);font-size:.82rem;margin-bottom:.75rem">Usa <strong style="color:var(--text)">exactamente</strong> este concepto en tus transferencias:</p>
+        <div class="concept-box">
+          <div class="concept-label">Concepto actual</div>
+          <div class="concept-value" id="up-concept">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Formas de pago</div>
+        <div class="payment-methods" id="up-payment-methods"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Historial de pagos</div>
+        <div id="up-history"><div class="empty"><div class="spinner" style="margin:0 auto"></div></div></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- BOTTOM NAV MOBILE -->
+  <nav class="bottom-nav" id="bottom-nav"></nav>
+
+</div>
+
+<!-- MODAL USUARIO -->
+<div class="modal-bg" id="modal-user">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-user-title">Nueva Banda</div>
+    <div class="field"><label>Nombre completo</label><input type="text" id="mu-name" placeholder="Juan García" autocomplete="off"></div>
+    <div class="field"><label>Nombre de la banda</label><input type="text" id="mu-band" placeholder="Los Riffs" autocomplete="off"></div>
+    <div class="field"><label>Email</label><input type="email" id="mu-email" placeholder="juan@email.com" autocomplete="off"></div>
+    <div class="field" id="mu-pass-field"><label>Contraseña <span style="color:var(--muted);font-size:.72rem">(mín. 6 caracteres)</span></label><input type="password" id="mu-pass" placeholder="••••••••"></div>
+    <div class="field"><label>Cuota personalizada € <span style="color:var(--muted);font-size:.72rem">(vacío = automática)</span></label><input type="number" id="mu-custom-quota" placeholder="—"></div>
+    <input type="hidden" id="mu-id">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-user')">Cancelar</button>
+      <button class="btn btn-primary" id="save-user-btn" onclick="saveUser()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL='https://vixxixmjqlsfryqkdywq.supabase.co';
+const SUPABASE_KEY='sb_publishable_v9pK4Q6OMYGjz1s3uDqEpA_Od4oIKjf';
+const {createClient}=supabase;
+const sb=createClient(SUPABASE_URL,SUPABASE_KEY);
+
+let currentUser=null,currentProfile=null,allUsers=[],appConfig={};
+
+// ── UTILS ──
+const months=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function getMonthName(m){return months[m-1];}
+function getCurrentMonth(){return new Date().getMonth()+1;}
+function getCurrentYear(){return new Date().getFullYear();}
+function getQuota(){const n=allUsers.length;return n>0?Math.round((appConfig.total_cost/n)*100)/100:0;}
+function getUserQuota(u){return u.custom_quota||getQuota();}
+function getConcept(u,month,year){
+  const band=u.band.toUpperCase().replace(/\s+/g,'-').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9\-]/g,'');
+  return`ENSAYO-${band}-${String(month).padStart(2,'0')}${year}`;
+}
+function toast(msg,type=''){
+  const t=document.getElementById('toast');
+  const d=document.createElement('div');
+  d.className='toast '+type;d.textContent=msg;t.appendChild(d);
+  setTimeout(()=>d.remove(),3200);
+}
+function showError(msg){const el=document.getElementById('login-error');el.textContent=msg;el.style.display='block';}
+function hideError(){document.getElementById('login-error').style.display='none';}
+
+// ── AUTH ──
+async function init(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(session)await loadUserAndShow(session.user);
+  else showLogin();
+}
+async function doLogin(){
+  hideError();
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  if(!email||!pass){showError('Completa email y contraseña');return;}
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){showError('Credenciales incorrectas');return;}
+  await loadUserAndShow(data.user);
+}
+async function loadUserAndShow(user){
+  currentUser=user;
+  const {data:profile}=await sb.from('profiles').select('*').eq('id',user.id).single();
+  if(!profile){showError('Error cargando perfil');showLogin();return;}
+  currentProfile=profile;
+  const {data:cfg}=await sb.from('config').select('*').single();
+  appConfig=cfg||{sala_name:'Mi Local',total_cost:800,bizum:'',iban:'',paypal:'',email_from:'',reminder_day:28};
+  if(profile.role==='admin'){
+    const {data:users}=await sb.from('profiles').select('*').neq('role','admin');
+    allUsers=users||[];
+  }
+  showApp();
+}
+function showLogin(){
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+}
+async function doLogout(){
+  await sb.auth.signOut();
+  currentUser=null;currentProfile=null;allUsers=[];
+  document.getElementById('app').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-email').value='';
+  document.getElementById('login-password').value='';
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&document.getElementById('login-screen').style.display!=='none')doLogin();
+});
+
+// ── APP ──
+function showApp(){
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  // topbar
+  document.getElementById('tb-name').textContent=currentProfile.name;
+  document.getElementById('tb-role').textContent=currentProfile.role==='admin'?'Admin':currentProfile.band;
+  // sidebar desktop
+  document.getElementById('sd-name').textContent=currentProfile.name;
+  document.getElementById('sd-role').textContent=currentProfile.role==='admin'?'Administrador':currentProfile.band;
+  buildNav();
+  navigateTo(currentProfile.role==='admin'?'dashboard':'mi-perfil');
+}
+
+function buildNav(){
+  const adminPages=[
+    {id:'dashboard',icon:'📊',label:'Inicio'},
+    {id:'usuarios',icon:'🎸',label:'Bandas'},
+    {id:'pagos',icon:'💳',label:'Pagos'},
+    {id:'historial',icon:'📋',label:'Historial'},
+    {id:'config',icon:'⚙️',label:'Config'},
+  ];
+  const userPages=[{id:'mi-perfil',icon:'🎸',label:'Mi perfil'}];
+  const pages=currentProfile.role==='admin'?adminPages:userPages;
+
+  // Bottom nav mobile
+  document.getElementById('bottom-nav').innerHTML=pages.map(p=>
+    `<button class="nav-item" id="nav-${p.id}" onclick="navigateTo('${p.id}')"><span class="nav-icon">${p.icon}</span>${p.label}</button>`
+  ).join('');
+
+  // Sidebar desktop
+  document.getElementById('sidebar-nav').innerHTML=pages.map(p=>
+    `<div class="sidebar-nav-item" id="snav-${p.id}" onclick="navigateTo('${p.id}')"><span>${p.icon}</span>${p.label}</div>`
+  ).join('');
+}
+
+function navigateTo(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item,.sidebar-nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page)?.classList.add('active');
+  document.getElementById('nav-'+page)?.classList.add('active');
+  document.getElementById('snav-'+page)?.classList.add('active');
+  document.querySelector('.main')?.scrollTo(0,0);
+  if(page==='dashboard')renderDashboard();
+  if(page==='usuarios')renderUsers();
+  if(page==='historial')renderHistorial();
+  if(page==='mi-perfil')renderMiPerfil();
+  if(page==='config')loadConfigInputs();
+  if(page==='pagos'){const now=new Date();document.getElementById('check-month').value=now.getMonth()+1;document.getElementById('check-year').value=now.getFullYear();}
+}
+
+// ── DASHBOARD ──
+async function renderDashboard(){
+  const m=getCurrentMonth(),y=getCurrentYear();
+  document.getElementById('dash-month').textContent=getMonthName(m)+' '+y;
+  document.getElementById('stat-users').textContent=allUsers.length;
+  document.getElementById('stat-total').textContent=appConfig.total_cost+'€';
+  document.getElementById('stat-quota').textContent=getQuota()+'€';
+  const {data:payments}=await sb.from('payments').select('*').eq('month',m).eq('year',y);
+  const pending=allUsers.filter(u=>{const p=payments?.find(pp=>pp.user_id===u.id);return!p||p.status!=='paid';});
+  document.getElementById('stat-pending').textContent=pending.length;
+  const el=document.getElementById('dash-payment-status');
+  if(!allUsers.length){el.innerHTML='<div class="empty"><div class="empty-icon">🎸</div>Sin usuarios aún</div>';return;}
+  el.innerHTML=allUsers.map(u=>{
+    const p=payments?.find(pp=>pp.user_id===u.id);
+    const paid=p&&p.status==='paid';
+    return`<div class="result-item ${paid?'paid':'unpaid'}">
+      <div class="result-top">
+        <div><div class="result-name">${u.name}</div><div class="result-band" style="color:var(--muted);font-size:.8rem">${u.band}</div></div>
+        <div style="text-align:right">
+          <div class="result-amount" style="color:${paid?'var(--green)':'var(--accent2)'}">${getUserQuota(u)}€</div>
+          <span class="badge ${paid?'badge-ok':'badge-pending'}">${paid?'✓ OK':'⏳ Pdte'}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── USUARIOS ──
+async function renderUsers(){
+  const {data:users}=await sb.from('profiles').select('*').neq('role','admin');
+  allUsers=users||[];
+  const el=document.getElementById('users-list');
+  if(!allUsers.length){el.innerHTML='<div class="empty"><div class="empty-icon">🎸</div>No hay bandas registradas</div>';return;}
+  const m=getCurrentMonth(),y=getCurrentYear();
+  const {data:payments}=await sb.from('payments').select('*').eq('month',m).eq('year',y);
+  const badges={paid:'<span class="badge badge-ok">Pagado</span>',pending:'<span class="badge badge-pending">Pendiente</span>',late:'<span class="badge badge-late">Tardío</span>'};
+  el.innerHTML=allUsers.map(u=>{
+    const p=payments?.find(pp=>pp.user_id===u.id);
+    const status=p?p.status:'pending';
+    return`<div class="user-card">
+      <div class="user-card-top">
+        <div><div class="user-card-name">${u.name}</div><div class="user-card-band">${u.band}</div></div>
+        ${badges[status]||badges.pending}
+      </div>
+      <div class="user-card-email">${u.email||'—'}</div>
+      <div class="user-card-bottom">
+        <div class="user-card-quota">${getUserQuota(u)}€/mes</div>
+        <div class="user-card-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openUserModal('${u.id}')">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openUserModal(id){
+  document.getElementById('modal-user-title').textContent=id?'Editar Banda':'Nueva Banda';
+  document.getElementById('mu-id').value=id||'';
+  document.getElementById('mu-pass-field').style.display=id?'none':'block';
+  if(id){
+    const u=allUsers.find(u=>u.id===id);
+    document.getElementById('mu-name').value=u.name;
+    document.getElementById('mu-band').value=u.band;
+    document.getElementById('mu-email').value=u.email||'';
+    document.getElementById('mu-custom-quota').value=u.custom_quota||'';
+  } else {
+    ['mu-name','mu-band','mu-email','mu-pass','mu-custom-quota'].forEach(i=>document.getElementById(i).value='');
+  }
+  document.getElementById('modal-user').classList.add('open');
+}
+
+async function saveUser(){
+  const btn=document.getElementById('save-user-btn');
+  btn.disabled=true;btn.textContent='Guardando...';
+  const id=document.getElementById('mu-id').value;
+  const name=document.getElementById('mu-name').value.trim();
+  const band=document.getElementById('mu-band').value.trim();
+  const email=document.getElementById('mu-email').value.trim();
+  const pass=document.getElementById('mu-pass').value;
+  const cq=parseFloat(document.getElementById('mu-custom-quota').value)||null;
+  if(!name||!band||!email){toast('Completa todos los campos','error');btn.disabled=false;btn.textContent='Guardar';return;}
+  if(id){
+    const {error}=await sb.from('profiles').update({name,band,custom_quota:cq}).eq('id',id);
+    if(error)toast('Error: '+error.message,'error');else toast('Banda actualizada','success');
+  } else {
+    if(!pass||pass.length<6){toast('Contraseña mínimo 6 caracteres','error');btn.disabled=false;btn.textContent='Guardar';return;}
+    const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{name,band,role:'user'}}});
+    if(error)toast('Error: '+error.message,'error');
+    else{await sb.from('profiles').update({name,band,custom_quota:cq}).eq('id',data.user.id);toast('Banda creada','success');}
+  }
+  btn.disabled=false;btn.textContent='Guardar';
+  closeModal('modal-user');
+  renderUsers();
+}
+
+async function deleteUser(id){
+  if(!confirm('¿Eliminar esta banda y todos sus pagos?'))return;
+  await sb.from('payments').delete().eq('user_id',id);
+  await sb.from('profiles').delete().eq('id',id);
+  toast('Banda eliminada');renderUsers();
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// ── PAGOS ──
+function dragOver(e){e.preventDefault();document.getElementById('upload-zone').classList.add('drag');}
+function dragLeave(){document.getElementById('upload-zone').classList.remove('drag');}
+function dropFile(e){e.preventDefault();dragLeave();const f=e.dataTransfer.files[0];if(f)processFile(f);}
+function handleFileUpload(e){if(e.target.files[0])processFile(e.target.files[0]);}
+function processFile(file){
+  toast('Procesando...');
+  const reader=new FileReader();
+  reader.onload=e=>{const rows=parseCSV(e.target.result);const m=parseInt(document.getElementById('check-month').value);const y=parseInt(document.getElementById('check-year').value);analyzePayments(rows,m,y);};
+  reader.readAsText(file,'UTF-8');
+}
+function parseCSV(text){return text.split('\n').filter(l=>l.trim()).map(l=>l.split(/[,;]/).map(c=>c.trim().replace(/^"|"$/g,'')));}
+function extractMovements(rows){
+  if(!rows||rows.length<2)return[];
+  const h=rows[0].map(x=>x.toLowerCase());
+  const ci=h.findIndex(x=>x.includes('concepto')||x.includes('descripci')||x.includes('motivo'));
+  const di=h.findIndex(x=>x.includes('fecha')||x.includes('date'));
+  const ai=h.findIndex(x=>x.includes('importe')||x.includes('amount'));
+  return rows.slice(1).map(r=>({fecha:di>=0?r[di]:'',concepto:ci>=0?r[ci]:r.join(' '),importe:ai>=0?parseFloat(r[ai].replace(',','.'))||0:0}));
+}
+async function loadSampleData(){
+  const m=parseInt(document.getElementById('check-month').value);
+  const y=parseInt(document.getElementById('check-year').value);
+  if(!allUsers.length){toast('Sin usuarios registrados','error');return;}
+  const paid=allUsers.slice(0,Math.ceil(allUsers.length*0.6));
+  const fake=paid.map(u=>({fecha:`${y}-${String(m).padStart(2,'0')}-${Math.floor(Math.random()*20)+1}`,concepto:getConcept(u,m,y),importe:getUserQuota(u)}));
+  await analyzePayments(null,m,y,fake);
+}
+async function analyzePayments(rows,month,year,fakeData){
+  const movements=fakeData||extractMovements(rows);
+  const results=[];
+  for(const u of allUsers){
+    const concept=getConcept(u,month,year);
+    const found=movements.find(m=>m.concepto&&m.concepto.toUpperCase().includes(concept.split('-').slice(0,-1).join('-')));
+    const paid=!!found;
+    const payData={user_id:u.id,month,year,amount:getUserQuota(u),status:paid?'paid':'pending',concept,paid_date:paid?(found.fecha||new Date().toISOString().split('T')[0]):null};
+    await sb.from('payments').upsert(payData,{onConflict:'user_id,month,year'});
+    results.push({user:u,paid,concept,amount:getUserQuota(u)});
+  }
+  renderPaymentResults(results,month,year);
+}
+function renderPaymentResults(results,month,year){
+  const paid=results.filter(r=>r.paid),unpaid=results.filter(r=>!r.paid);
+  let html=`<div class="card">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;margin-bottom:.75rem">${getMonthName(month)} ${year}</div>
+    <div style="display:flex;gap:1.5rem;margin-bottom:1rem">
+      <div style="text-align:center"><div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--green)">${paid.length}</div><div style="color:var(--muted);font-size:.75rem">Pagados</div></div>
+      <div style="text-align:center"><div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent2)">${unpaid.length}</div><div style="color:var(--muted);font-size:.75rem">Pendientes</div></div>
+    </div>`;
+  results.forEach(r=>{
+    html+=`<div class="result-item ${r.paid?'paid':'unpaid'}">
+      <div class="result-top">
+        <div><div class="result-name">${r.user.name}</div><div style="color:var(--muted);font-size:.8rem">${r.user.band}</div></div>
+        <div style="text-align:right"><div class="result-amount" style="color:${r.paid?'var(--green)':'var(--accent2)'}">${r.amount}€</div><span class="badge ${r.paid?'badge-ok':'badge-late'}">${r.paid?'✓ OK':'✗ Pdte'}</span></div>
+      </div>
+      <div class="result-concept">${r.concept}</div>
+      ${!r.paid?`<div style="margin-top:.6rem"><button class="btn btn-ghost btn-sm" onclick="sendReminder('${r.user.id}',${month},${year})">📧 Recordar</button></div>`:''}
+    </div>`;
+  });
+  html+='</div>';
+  if(!unpaid.length)html+='<div class="alert-box success">✅ ¡Todas las bandas han pagado!</div>';
+  else html+=`<div class="alert-box">⚠️ ${unpaid.length} pendiente(s). <button class="btn btn-ghost btn-sm" style="margin-top:.5rem;width:100%" onclick="sendAllReminders(${month},${year})">📧 Recordar a todos</button></div>`;
+  document.getElementById('payment-results').innerHTML=html;
+  toast('Análisis completado','success');
+}
+function clearResults(){document.getElementById('payment-results').innerHTML='';}
+
+// ── HISTORIAL ──
+async function renderHistorial(){
+  const {data:users}=await sb.from('profiles').select('*').neq('role','admin');
+  allUsers=users||[];
+  const sel=document.getElementById('filter-user');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Todas las bandas</option>'+allUsers.map(u=>`<option value="${u.id}">${u.band}</option>`).join('');
+  sel.value=cur;
+  let query=sb.from('payments').select('*,profiles(name,band)').order('year',{ascending:false}).order('month',{ascending:false});
+  const fu=sel.value,fs=document.getElementById('filter-status').value;
+  if(fu)query=query.eq('user_id',fu);
+  if(fs)query=query.eq('status',fs);
+  const {data:payments}=await query;
+  const badges={paid:'<span class="badge badge-ok">Pagado</span>',pending:'<span class="badge badge-pending">Pendiente</span>',late:'<span class="badge badge-late">Tardío</span>'};
+  const el=document.getElementById('historial-list');
+  if(!payments?.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>Sin registros</div>';return;}
+  el.innerHTML=payments.map(p=>`<div class="hist-card">
+    <div>
+      <div class="hist-month">${p.profiles?.band||'—'} — ${getMonthName(p.month)} ${p.year}</div>
+      <div class="hist-concept">${p.concept||'—'}</div>
+      <div style="margin-top:.3rem">${badges[p.status]||'—'}</div>
+    </div>
+    <div class="hist-right">
+      <div class="hist-amount">${p.amount}€</div>
+      <div class="hist-date">${p.paid_date||'—'}</div>
+    </div>
+  </div>`).join('');
+}
+
+// ── CONFIG ──
+function loadConfigInputs(){
+  document.getElementById('cfg-sala-name').value=appConfig.sala_name||'';
+  document.getElementById('cfg-total-cost').value=appConfig.total_cost||0;
+  document.getElementById('cfg-bizum').value=appConfig.bizum||'';
+  document.getElementById('cfg-iban').value=appConfig.iban||'';
+  document.getElementById('cfg-paypal').value=appConfig.paypal||'';
+  document.getElementById('cfg-email-from').value=appConfig.email_from||'';
+  document.getElementById('cfg-reminder-day').value=appConfig.reminder_day||28;
+  updateQuotaPreview();
+}
+function updateQuotaPreview(){
+  const total=parseFloat(document.getElementById('cfg-total-cost').value)||0;
+  const n=allUsers.length||1;
+  document.getElementById('cfg-quota-preview').textContent=Math.round(total/n*100)/100+' €';
+}
+async function saveConfig(){
+  const cfg={sala_name:document.getElementById('cfg-sala-name').value,total_cost:parseFloat(document.getElementById('cfg-total-cost').value)||0,bizum:document.getElementById('cfg-bizum').value,iban:document.getElementById('cfg-iban').value,paypal:document.getElementById('cfg-paypal').value,email_from:document.getElementById('cfg-email-from').value,reminder_day:parseInt(document.getElementById('cfg-reminder-day').value)||28,updated_at:new Date().toISOString()};
+  const {error}=await sb.from('config').update(cfg).eq('id',1);
+  if(error)toast('Error: '+error.message,'error');
+  else{appConfig={...appConfig,...cfg};toast('Guardado','success');}
+}
+function switchConfigTab(tab,el){
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
+  ['local','pagos','email'].forEach(t=>{document.getElementById('config-tab-'+t).style.display=t===tab?'block':'none';});
+}
+
+// ── MI PERFIL ──
+async function renderMiPerfil(){
+  const u=currentProfile;
+  document.getElementById('up-avatar').textContent=u.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+  document.getElementById('up-name').textContent=u.name;
+  document.getElementById('up-band').textContent=u.band;
+  document.getElementById('up-email').textContent=currentUser.email;
+  document.getElementById('up-quota').textContent=getUserQuota(u)+'€/mes';
+  const m=getCurrentMonth(),y=getCurrentYear();
+  document.getElementById('up-concept').textContent=getConcept(u,m,y);
+  document.getElementById('up-payment-methods').innerHTML=`
+    <div class="pm-card"><div class="pm-icon">📱</div><div class="pm-name">Bizum</div><div class="pm-detail">${appConfig.bizum||'—'}</div></div>
+    <div class="pm-card"><div class="pm-icon">🏦</div><div class="pm-name">Banco</div><div class="pm-detail">${appConfig.iban||'—'}</div></div>
+    <div class="pm-card"><div class="pm-icon">💰</div><div class="pm-name">PayPal</div><div class="pm-detail">${appConfig.paypal||'—'}</div></div>`;
+  const {data:payments}=await sb.from('payments').select('*').eq('user_id',u.id).order('year',{ascending:false}).order('month',{ascending:false});
+  const badges={paid:'<span class="badge badge-ok">✓ Pagado</span>',pending:'<span class="badge badge-pending">Pendiente</span>',late:'<span class="badge badge-late">Tardío</span>'};
+  const hist=document.getElementById('up-history');
+  if(!payments?.length){hist.innerHTML='<div class="empty"><div class="empty-icon">📋</div>Sin historial aún</div>';return;}
+  hist.innerHTML=payments.map(p=>`<div class="hist-card">
+    <div><div class="hist-month">${getMonthName(p.month)} ${p.year}</div><div class="hist-concept">${p.concept||''}</div><div style="margin-top:.3rem">${badges[p.status]||''}</div></div>
+    <div class="hist-right"><div class="hist-amount">${p.amount}€</div><div class="hist-date">${p.paid_date||''}</div></div>
+  </div>`).join('');
+}
+
+// ── EMAILS ──
+async function sendMonthlyReminder(){
+  const m=getCurrentMonth(),y=getCurrentYear();
+  const {data:payments}=await sb.from('payments').select('*').eq('month',m).eq('year',y);
+  const pending=allUsers.filter(u=>{const p=payments?.find(pp=>pp.user_id===u.id);return!p||p.status!=='paid';});
+  if(!pending.length){toast('¡Todos han pagado!','success');return;}
+  pending.forEach(u=>logEmail(u,m,y,false));
+  toast(`📧 Recordatorio a ${pending.length} bandas`,'success');
+}
+async function sendReminder(uid,month,year){
+  const u=allUsers.find(u=>u.id===uid);if(!u)return;
+  logEmail(u,month,year,true);toast(`📧 Urgente → ${u.band}`,'success');
+}
+async function sendAllReminders(month,year){
+  const {data:payments}=await sb.from('payments').select('*').eq('month',month).eq('year',year);
+  const pending=allUsers.filter(u=>{const p=payments?.find(pp=>pp.user_id===u.id);return!p||p.status!=='paid';});
+  pending.forEach(u=>logEmail(u,month,year,true));
+  toast(`📧 Urgente a ${pending.length} bandas`,'success');
+}
+function logEmail(u,month,year,urgent){
+  console.log(`%c[EMAIL ${urgent?'URGENTE':'RECORDATORIO'}] → ${u.email||'sin email'}\nAsunto: ${urgent?'⚠️ URGENTE:':'📅'} Cuota ${getMonthName(month)} ${year}\nImporte: ${getUserQuota(u)}€ | Concepto: ${getConcept(u,month,year)}\nBizum: ${appConfig.bizum} | IBAN: ${appConfig.iban} | PayPal: ${appConfig.paypal}`,'color:#e8ff47');
+}
+
+window.addEventListener('load',init);
+</script>
+</body>
+</html>
